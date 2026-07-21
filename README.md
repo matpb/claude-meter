@@ -3,7 +3,8 @@
 A KDE Plasma panel widget that shows your **live Claude usage** — the 5-hour and 7-day
 subscription windows — as two compact bars, colored by how you're tracking against the clock.
 
-![Claude Meter in the panel](docs/panel.png)
+<img src="docs/panel.png" alt="Claude Meter in the panel" width="360">
+
 
 It reads your usage straight from claude.ai, so it's always fresh, counts usage from **every device**
 (phone, web, other machines), and costs **zero tokens** — it's a read-only status check, not a prompt.
