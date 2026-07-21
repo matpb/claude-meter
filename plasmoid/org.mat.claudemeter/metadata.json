@@ -1,0 +1,21 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Id": "org.mat.claudemeter",
+        "Name": "Claude Meter",
+        "Description": "Live Claude usage bars (5-hour and 7-day windows) for your KDE panel",
+        "Icon": "speedometer",
+        "Authors": [
+            {
+                "Name": "Mathieu-Philippe Bourgeois",
+                "Email": ""
+            }
+        ],
+        "Website": "https://github.com/matpb/claude-meter",
+        "Category": "System Information",
+        "License": "MIT",
+        "Version": "1.0.0",
+        "EnabledByDefault": true
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

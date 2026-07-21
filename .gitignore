@@ -1,0 +1,10 @@
+# Nothing sensitive is generated in-tree, but keep the repo tidy.
+*.tmp
+*.bak
+*.log
+*~
+.DS_Store
+
+# Local, per-user runtime state (never committed):
+#   ~/.config/claude-meter/org_id   (auto-detected org id)
+#   ~/.claude/usage/.ratelimit.json (optional statusline fallback snapshot)
