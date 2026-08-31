@@ -31,6 +31,9 @@ PlasmoidItem {
     readonly property int  staleSec: 600           // reading older than this = stale
     readonly property bool stale:  haveData && ageSec > staleSec
     readonly property bool noData: !haveData
+    // Fresh-but-cached is the dangerous state: the statusline rewrites the snapshot every
+    // few seconds, so a dead live fetch otherwise renders as a perfectly healthy widget.
+    readonly property bool degraded: haveData && source !== "" && source !== "live"
     // The reader ships inside this package (contents/scripts/); resolve its absolute path at runtime
     // so the widget works for any user, from wherever the plasmoid is installed.
     readonly property string meterScript:
@@ -136,8 +139,9 @@ PlasmoidItem {
     }
 
     function sourceText() {
-        if (source === "live") return "live"
+        if (source === "live") return "live · account-wide"
         return "cached · " + fmtAge(ageSec) + " ago" + (ageSec > staleSec ? " · stale" : "")
+             + "\nlive claude.ai fetch unavailable — this machine's Claude Code only"
     }
 
     function tipText() {
@@ -352,18 +356,18 @@ PlasmoidItem {
 
             // staleness / no-data badge — only occupies space when relevant
             RowLayout {
-                visible: root.stale || root.noData
+                visible: root.stale || root.noData || root.degraded
                 Layout.fillHeight: true
                 spacing: 2
                 Kirigami.Icon {
-                    source: root.noData ? "documentinfo" : "clock"
+                    source: root.noData ? "documentinfo" : root.stale ? "clock" : "offline"
                     Layout.preferredWidth: Kirigami.Units.iconSizes.small
                     Layout.preferredHeight: Kirigami.Units.iconSizes.small
                     Layout.alignment: Qt.AlignVCenter
                     opacity: 0.75
                 }
                 PlasmaComponents.Label {
-                    text: root.noData ? "no data" : root.fmtAge(root.ageSec)
+                    text: root.noData ? "no data" : root.stale ? root.fmtAge(root.ageSec) : "cached"
                     font.pixelSize: Math.max(8, contentRow.height * 0.36)
                     opacity: 0.75
                     Layout.alignment: Qt.AlignVCenter
@@ -482,7 +486,8 @@ PlasmoidItem {
                     ? (root.source === "live"
                         ? "live · just now"
                         : ("cached · updated " + root.fmtAge(root.ageSec) + " ago"
-                           + (root.ageSec > root.staleSec ? "  ·  stale" : "")))
+                           + (root.ageSec > root.staleSec ? "  ·  stale" : "")
+                           + "  ·  log in to claude.ai for account-wide numbers"))
                     : "no data yet — run Claude Code once"
             }
         }

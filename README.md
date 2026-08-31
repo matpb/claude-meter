@@ -37,8 +37,12 @@ Each bar packs four signals:
 
 Hover for exact numbers, reset countdowns and pace; click to open the detail popup above.
 
-When the live fetch can't run (browser logged out, wallet locked, offline) the bars **dim and show a
-small clock with the reading's age**, so you always know when you're looking at a stale number.
+When the reading is not live, the panel shows a **disconnected-plug badge reading “cached”** — the live claude.ai fetch failed and the bars are coming from the Claude Code statusline snapshot, which only counts *this machine*. If that fallback also goes stale (older than ten minutes) the bars
+dim and the badge switches to a clock with the reading's age. Hover for the reason and the fix.
+
+This matters because a fresh fallback is otherwise indistinguishable from a live reading: the
+snapshot gets rewritten every few seconds, so a dead live path used to render as a perfectly
+healthy widget. The badge is what makes the degradation visible.
 
 ## Requirements
 
