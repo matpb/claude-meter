@@ -124,6 +124,11 @@ CLAUDE_METER_DEBUG=1 ~/.local/share/plasma/plasmoids/org.mat.claudemeter/content
 - **Bars are dimmed with a clock** — the live fetch failed and it's showing the last cached snapshot.
 - **Nothing updates** — restart the shell: `kquitapp6 plasmashell && kstart plasmashell`.
 
+## See also
+
+[**Codex Meter**](https://github.com/matpb/codex-meter) — the same widget for OpenAI Codex usage. The
+two are fully independent; run either or both.
+
 ## Disclaimer
 
 This is an **unofficial** tool and is not affiliated with or endorsed by Anthropic. It reads an
