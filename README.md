@@ -103,6 +103,16 @@ Everything auto-detects. These environment variables only exist as overrides:
 | `CLAUDE_USAGE_DIR` | Where to read the optional statusline fallback snapshot (default `~/.claude/usage`). |
 | `CLAUDE_METER_DEBUG=1` | Print diagnostics to stderr — run the reader by hand to see why the live fetch fails. |
 
+## Options
+
+Right-click the widget → **Configure Claude Meter…** → **Appearance**:
+
+| Option | Default | What it does |
+|---|---|---|
+| **Show the Claude icon** | on | Puts the Claude mark in front of the bars. Handy when you run this next to the sibling widget and want to tell them apart at a glance. |
+| **Tint it to match the panel** | off | Renders the mark in your panel's text colour instead of the brand colour. |
+| **Show the "5h" and "7d" labels** | on | Turn off to reclaim panel width once the icon makes it obvious which widget is which. |
+
 ## Uninstall
 
 ```bash
@@ -134,6 +144,12 @@ two are fully independent; run either or both.
 This is an **unofficial** tool and is not affiliated with or endorsed by Anthropic. It reads an
 undocumented claude.ai endpoint using your own logged-in session, which could change at any time. Use
 it for your own account only.
+
+## Icon
+
+The bundled Claude mark comes from [Simple Icons](https://simpleicons.org) (icon files are CC0).
+The trademark itself belongs to Anthropic; this project is unaffiliated and only uses the mark to
+label which service the bars are reporting on.
 
 ## License
 

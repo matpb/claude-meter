@@ -307,6 +307,19 @@ PlasmoidItem {
                              Kirigami.Units.gridUnit * 2.3)
             spacing: Kirigami.Units.smallSpacing
 
+            Kirigami.Icon {
+                id: brandIcon
+                visible: Plasmoid.configuration.showIcon
+                source: Qt.resolvedUrl("../icons/claude.svg")
+                isMask: Plasmoid.configuration.monochromeIcon
+                color: Kirigami.Theme.textColor
+                Layout.preferredWidth: visible ? Math.round(contentRow.height * 0.72) : 0
+                Layout.preferredHeight: Layout.preferredWidth
+                Layout.alignment: Qt.AlignVCenter
+                opacity: root.stale ? 0.5 : 1.0
+                Behavior on opacity { NumberAnimation { duration: 400 } }
+            }
+
             ColumnLayout {
                 id: barsCol
                 Layout.preferredWidth: Kirigami.Units.gridUnit * 6
@@ -318,7 +331,7 @@ PlasmoidItem {
                 MeterBar {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    label: "5h"
+                    label: Plasmoid.configuration.showWindowLabels ? "5h" : ""
                     active: root.haveData
                     stale: root.stale
                     value: root.data5.pct
@@ -328,7 +341,7 @@ PlasmoidItem {
                 MeterBar {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    label: "7d"
+                    label: Plasmoid.configuration.showWindowLabels ? "7d" : ""
                     active: root.haveData
                     stale: root.stale
                     value: root.data7.pct
@@ -424,7 +437,7 @@ PlasmoidItem {
                 Layout.fillWidth: true
                 spacing: Kirigami.Units.smallSpacing
                 Kirigami.Icon {
-                    source: "speedometer"
+                    source: Qt.resolvedUrl("../icons/claude.svg")
                     Layout.preferredWidth: Kirigami.Units.iconSizes.medium
                     Layout.preferredHeight: Kirigami.Units.iconSizes.medium
                 }
