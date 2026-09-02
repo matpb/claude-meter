@@ -1,6 +1,7 @@
 /*
  * Claude Meter — KDE Plasma 6 applet
- * Two capsule bars in the panel: your 5-hour and 7-day Claude subscription usage windows.
+ * Capsule bars in the panel: your 5-hour and 7-day Claude subscription usage windows, plus the
+ * per-model weekly window (Fable) when your plan has one.
  * Data comes from the bundled reader (contents/scripts/claude-meter.sh), which fetches your live
  * usage from claude.ai and falls back to an optional Claude Code statusline snapshot when offline.
  *
@@ -25,6 +26,11 @@ PlasmoidItem {
     // ---- state ----
     property var  data5:    ({ pct: 0, reset_in: null })
     property var  data7:    ({ pct: 0, reset_in: null })
+    property var  dataM:    null                    // per-model weekly window {name,pct,reset_in}, or null
+    readonly property bool haveModel: haveData && dataM !== null
+    // 0 = 5h + 7d, 1 = 5h + 7d + model, 2 = 5h + model
+    readonly property bool panelShow7: Plasmoid.configuration.panelBars !== 2
+    readonly property bool panelShowM: haveModel && Plasmoid.configuration.panelBars !== 0
     property bool haveData: false
     property int  ageSec:   0
     property string source:  ""                     // "live" (endpoint) or "cache" (statusline fallback)
@@ -145,8 +151,9 @@ PlasmoidItem {
     }
 
     function tipText() {
-        return lineFor("5h", data5, 18000) + "\n" + lineFor("7d", data7, 604800)
-            + "\n" + sourceText()
+        var s = lineFor("5h", data5, 18000) + "\n" + lineFor("7d", data7, 604800)
+        if (haveModel) s += "\n" + lineFor(dataM.name, dataM, 604800)
+        return s + "\n" + sourceText()
     }
 
     // ============================ data source ============================
@@ -165,6 +172,7 @@ PlasmoidItem {
                 if (j && j.ok) {
                     root.data5    = j.five
                     root.data7    = j.seven
+                    root.dataM    = (j.model && typeof j.model === "object") ? j.model : null
                     root.ageSec   = j.age || 0
                     root.source   = j.source || ""
                     root.haveData = true
@@ -200,9 +208,12 @@ PlasmoidItem {
         property bool   stale: false
         property bool   justReset: false
         property bool   showValue: true  // inline % label (panel needs it; popup has its own header)
+        property real   labelWidth: -1   // <0 = default width; else shared width so sibling bars align
+        readonly property real labelImplicitWidth: labelItem.visible ? labelItem.implicitWidth : 0
 
         implicitHeight: Kirigami.Units.gridUnit
         implicitWidth:  Kirigami.Units.gridUnit * 6
+        Layout.minimumHeight: 4
 
         readonly property real  v: Math.max(0, Math.min(100, value))
         readonly property color fillColor: mb.stale
@@ -214,12 +225,16 @@ PlasmoidItem {
             spacing: Kirigami.Units.smallSpacing
 
             PlasmaComponents.Label {
+                id: labelItem
                 text: mb.label
                 visible: mb.label.length > 0
                 font.pixelSize: Math.max(8, mb.height * 0.62)
                 font.bold: true
                 opacity: 0.6
-                Layout.preferredWidth: mb.label.length > 0 ? Kirigami.Units.gridUnit * 0.95 : 0
+                Layout.minimumHeight: 0
+                Layout.fillHeight: true
+                Layout.preferredWidth: mb.label.length === 0 ? 0
+                    : mb.labelWidth >= 0 ? mb.labelWidth : Kirigami.Units.gridUnit * 0.95
                 horizontalAlignment: Text.AlignLeft
                 verticalAlignment: Text.AlignVCenter
             }
@@ -228,6 +243,7 @@ PlasmoidItem {
                 id: track
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                Layout.minimumHeight: 0
                 Layout.maximumHeight: Kirigami.Units.gridUnit * 0.9
                 Layout.alignment: Qt.AlignVCenter
                 radius: height / 2
@@ -286,6 +302,8 @@ PlasmoidItem {
                 font.pixelSize: Math.max(8, mb.height * 0.58)
                 font.bold: true
                 color: mb.active ? mb.fillColor : Qt.rgba(0.6, 0.6, 0.6, 1)
+                Layout.minimumHeight: 0
+                Layout.fillHeight: true
                 Layout.preferredWidth: mb.showValue ? Kirigami.Units.gridUnit * 1.7 : 0
                 horizontalAlignment: Text.AlignRight
                 verticalAlignment: Text.AlignVCenter
@@ -308,7 +326,7 @@ PlasmoidItem {
             id: contentRow
             anchors.centerIn: parent
             height: Math.min(parent.height - Kirigami.Units.smallSpacing,
-                             Kirigami.Units.gridUnit * 2.3)
+                             Kirigami.Units.gridUnit * (barsCol.barCount === 3 ? 3.3 : 2.3))
             spacing: Kirigami.Units.smallSpacing
 
             Kirigami.Icon {
@@ -328,13 +346,18 @@ PlasmoidItem {
                 id: barsCol
                 Layout.preferredWidth: Kirigami.Units.gridUnit * 6
                 Layout.fillHeight: true
-                spacing: Kirigami.Units.smallSpacing
+                spacing: barCount === 3 ? 2 : Kirigami.Units.smallSpacing
                 opacity: root.stale ? 0.5 : 1.0
                 Behavior on opacity { NumberAnimation { duration: 400 } }
+                readonly property int  barCount: 1 + (root.panelShow7 ? 1 : 0) + (root.panelShowM ? 1 : 0)
+                readonly property real labelW: Math.max(bar5.labelImplicitWidth, bar7.labelImplicitWidth,
+                                                        barM.labelImplicitWidth, Kirigami.Units.gridUnit * 0.95)
 
                 MeterBar {
+                    id: bar5
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    labelWidth: barsCol.labelW
                     label: Plasmoid.configuration.showWindowLabels ? "5h" : ""
                     active: root.haveData
                     stale: root.stale
@@ -343,14 +366,30 @@ PlasmoidItem {
                     justReset: root.haveData && root.data5.reset_in !== null && root.data5.reset_in <= 0
                 }
                 MeterBar {
+                    id: bar7
+                    visible: root.panelShow7
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    labelWidth: barsCol.labelW
                     label: Plasmoid.configuration.showWindowLabels ? "7d" : ""
                     active: root.haveData
                     stale: root.stale
                     value: root.data7.pct
                     timePct: root.timePctOf(root.data7.reset_in, 604800)
                     justReset: root.haveData && root.data7.reset_in !== null && root.data7.reset_in <= 0
+                }
+                MeterBar {
+                    id: barM
+                    visible: root.panelShowM
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    labelWidth: barsCol.labelW
+                    label: (Plasmoid.configuration.showWindowLabels && root.haveModel) ? root.dataM.name : ""
+                    active: root.haveModel
+                    stale: root.stale
+                    value: root.haveModel ? root.dataM.pct : 0
+                    timePct: root.haveModel ? root.timePctOf(root.dataM.reset_in, 604800) : null
+                    justReset: root.haveModel && root.dataM.reset_in !== null && root.dataM.reset_in <= 0
                 }
             }
 
@@ -428,9 +467,9 @@ PlasmoidItem {
 
     fullRepresentation: Item {
         Layout.minimumWidth:  Kirigami.Units.gridUnit * 18
-        Layout.minimumHeight: Kirigami.Units.gridUnit * 12
+        Layout.minimumHeight: Kirigami.Units.gridUnit * (root.haveModel ? 16 : 12)
         Layout.preferredWidth:  Kirigami.Units.gridUnit * 20
-        Layout.preferredHeight: Kirigami.Units.gridUnit * 13
+        Layout.preferredHeight: Kirigami.Units.gridUnit * (root.haveModel ? 17 : 13)
 
         ColumnLayout {
             anchors.fill: parent
@@ -472,6 +511,14 @@ PlasmoidItem {
                 title: "7-day window"
                 d: root.data7
                 active: root.haveData
+                windowSec: 604800
+            }
+
+            WindowBlock {
+                visible: root.haveModel
+                title: (root.haveModel ? root.dataM.name : "Model") + " · 7-day window"
+                d: root.haveModel ? root.dataM : ({ pct: 0, reset_in: null })
+                active: root.haveModel
                 windowSec: 604800
             }
 

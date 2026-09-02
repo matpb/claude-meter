@@ -15,5 +15,8 @@
     <entry name="showWindowLabels" type="Bool">
       <default>true</default>
     </entry>
+    <entry name="panelBars" type="Int">
+      <default>0</default>
+    </entry>
   </group>
 </kcfg>

@@ -10,8 +10,9 @@
 #   (see extras/statusline-cache.sh in the repo). Used when the live fetch can't run (browser logged
 #   out, wallet locked, offline). When falling back, `age` reflects how old that snapshot is.
 #
-# Output: {"ok":true,"source":"live"|"cache","age":N,"five":{"pct":P,"reset_in":S},"seven":{...}}
-#         or {"ok":false,"reason":"..."}
+# Output: {"ok":true,"source":"live"|"cache","age":N,"five":{"pct":P,"reset_in":S},"seven":{...},
+#          "model":{"name":"Fable","pct":P,"reset_in":S}|null}   or {"ok":false,"reason":"..."}
+#   "model" = the per-model weekly window (limits[].kind == "weekly_scoped", currently Fable); null in fallback.
 #
 # Optional environment overrides (none are required — everything auto-detects):
 #   CLAUDE_ORG_ID          your claude.ai organization UUID (else auto-detected by "chat" capability)
@@ -41,7 +42,7 @@ emit_cache() {
         | { pct:      (if ($r != null and $r <= $now) then 0 else $p end),
             reset_in: (if $ri == null then null elif $ri < 0 then 0 else $ri end) };
       { ok: true, source: "cache", age: ($now - (.ts // $now)),
-        five: win(.five; 18000), seven: win(.seven; 604800) }
+        five: win(.five; 18000), seven: win(.seven; 604800), model: null }
     ' "$cache" 2>/dev/null || printf '{"ok":false,"reason":"parse-error"}\n'
 }
 
@@ -151,7 +152,11 @@ try_live() {
           five:  { pct: (.five_hour.utilization),
                    reset_in: (if .five_hour.resets_at  == null then null else ((.five_hour.resets_at  | toepoch) - $now) end) },
           seven: { pct: (.seven_day.utilization),
-                   reset_in: (if .seven_day.resets_at == null then null else ((.seven_day.resets_at | toepoch) - $now) end) } }
+                   reset_in: (if .seven_day.resets_at == null then null else ((.seven_day.resets_at | toepoch) - $now) end) },
+          model: ((.limits // []) | map(select(.kind == "weekly_scoped" and .scope.model != null)) | first
+                  | if . == null then null else
+                    { name: (.scope.model.display_name // "model"), pct: (.percent // 0),
+                      reset_in: (if .resets_at == null then null else ((.resets_at | toepoch) - $now) end) } end) }
     ' 2>/dev/null || { log "could not parse usage response"; return 1; }
 }
 
