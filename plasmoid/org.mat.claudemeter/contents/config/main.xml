@@ -5,6 +5,21 @@
       http://www.kde.org/standards/kcfg/1.0/kcfg.xsd" >
   <kcfgfile name=""/>
 
+  <group name="Account">
+    <entry name="accountLabel" type="String">
+      <default></default>
+    </entry>
+    <entry name="cookiesPath" type="String">
+      <default></default>
+    </entry>
+    <entry name="usageDir" type="String">
+      <default></default>
+    </entry>
+    <entry name="iconPath" type="String">
+      <default></default>
+    </entry>
+  </group>
+
   <group name="Appearance">
     <entry name="showIcon" type="Bool">
       <default>true</default>

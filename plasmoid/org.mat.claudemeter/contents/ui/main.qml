@@ -42,13 +42,22 @@ PlasmoidItem {
     readonly property bool degraded: haveData && source !== "" && source !== "live"
     // The reader ships inside this package (contents/scripts/); resolve its absolute path at runtime
     // so the widget works for any user, from wherever the plasmoid is installed.
-    readonly property string meterScript:
-        "bash '" + String(Qt.resolvedUrl("../scripts/claude-meter.sh")).replace("file://", "") + "'"
+    function shq(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'" }
+    readonly property string meterScript: {
+        var env = ""
+        if (Plasmoid.configuration.cookiesPath !== "") env += " CLAUDE_CHROME_COOKIES=" + shq(Plasmoid.configuration.cookiesPath)
+        if (Plasmoid.configuration.usageDir !== "")    env += " CLAUDE_USAGE_DIR=" + shq(Plasmoid.configuration.usageDir)
+        return "env" + env + " bash " + shq(String(Qt.resolvedUrl("../scripts/claude-meter.sh")).replace("file://", ""))
+    }
+    readonly property string accountLabel: Plasmoid.configuration.accountLabel
+    readonly property string accountTitle: accountLabel !== "" ? "Claude · " + accountLabel : "Claude Code"
+    readonly property string iconSource: Plasmoid.configuration.iconPath !== ""
+        ? Plasmoid.configuration.iconPath : Qt.resolvedUrl("../icons/claude.svg")
 
     preferredRepresentation: compactRepresentation
     Plasmoid.backgroundHints: PlasmaCore.Types.NoBackground
 
-    toolTipMainText: "Claude Code usage"
+    toolTipMainText: root.accountTitle + " usage"
     toolTipSubText: root.haveData
         ? root.tipText()
         : "Waiting for the first Claude Code render…"
@@ -196,6 +205,7 @@ PlasmoidItem {
     }
 
     Component.onCompleted: exec.poll()
+    onMeterScriptChanged: { root.haveData = false; exec.poll() }
 
     // ============================ reusable bar ============================
 
@@ -332,7 +342,7 @@ PlasmoidItem {
             Kirigami.Icon {
                 id: brandIcon
                 visible: Plasmoid.configuration.showIcon
-                source: Qt.resolvedUrl("../icons/claude.svg")
+                source: root.iconSource
                 isMask: Plasmoid.configuration.monochromeIcon
                 color: Kirigami.Theme.textColor
                 Layout.preferredWidth: visible ? Math.round(contentRow.height * 0.72) : 0
@@ -480,14 +490,14 @@ PlasmoidItem {
                 Layout.fillWidth: true
                 spacing: Kirigami.Units.smallSpacing
                 Kirigami.Icon {
-                    source: Qt.resolvedUrl("../icons/claude.svg")
+                    source: root.iconSource
                     Layout.preferredWidth: Kirigami.Units.iconSizes.medium
                     Layout.preferredHeight: Kirigami.Units.iconSizes.medium
                 }
                 ColumnLayout {
                     spacing: 0
                     PlasmaComponents.Label {
-                        text: "Claude Code"
+                        text: root.accountTitle
                         font.bold: true
                         font.pixelSize: Kirigami.Units.gridUnit * 1.0
                     }

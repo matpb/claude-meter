@@ -88,6 +88,7 @@ The installer registers the plasmoid and offers to drop it straight into your to
 rather add it by hand: right-click your panel → **Add Widgets…** → search **Claude Meter**.
 
 No configuration needed — it auto-detects your Claude organization and your browser on first run.
+Running two subscriptions? See [Two subscriptions, two meters](#two-subscriptions-two-meters).
 
 ## How it works
 
@@ -120,6 +121,22 @@ Everything auto-detects. These environment variables only exist as overrides:
 | `CLAUDE_CHROME_COOKIES` | Path to a specific browser `Cookies` SQLite DB. |
 | `CLAUDE_USAGE_DIR` | Where to read the optional statusline fallback snapshot (default `~/.claude/usage`). |
 | `CLAUDE_METER_DEBUG=1` | Print diagnostics to stderr — run the reader by hand to see why the live fetch fails. |
+
+## Two subscriptions, two meters
+
+Each Claude subscription is its own claude.ai login, so keep each one in its own browser profile.
+Then add a second **Claude Meter** to the panel and, in **Configure → Account**, point it at that
+profile. The page lists every Chromium profile it finds (browser, profile name, Google account), so it
+is a pick from a dropdown, not a path hunt. Give each meter a name and, if you like, its own icon:
+
+| Option | What it does |
+|---|---|
+| **Account name** | Shown in the hover text and the popup ("Claude · Work"). |
+| **Browser profile** | Which cookie store to read the claude.ai session from. Auto-detect takes the first profile logged in. |
+| **Statusline snapshot dir** | Offline fallback for that account. If it runs Claude Code under its own `CLAUDE_CONFIG_DIR`, use `<that dir>/usage`. |
+| **Panel icon** | Any SVG or PNG in place of the Claude mark. The quickest way to tell two meters apart at a glance. |
+
+Each meter keeps its own organization cache, so two instances never mix accounts.
 
 ## Options
 

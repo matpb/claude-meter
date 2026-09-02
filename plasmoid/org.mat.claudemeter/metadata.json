@@ -14,7 +14,7 @@
         "Website": "https://github.com/matpb/claude-meter",
         "Category": "System Information",
         "License": "MIT",
-        "Version": "1.1.0",
+        "Version": "1.2.0",
         "EnabledByDefault": true
     },
     "X-Plasma-API-Minimum-Version": "6.0"

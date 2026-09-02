@@ -27,10 +27,48 @@ cfg_dir="${XDG_CONFIG_HOME:-$HOME/.config}/claude-meter"
 usage_dir="${CLAUDE_USAGE_DIR:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/usage}"
 cache="$usage_dir/.ratelimit.json"
 org_cache="$cfg_dir/org_id"
+# One widget per account: an explicit cookie DB gets its own org cache so two instances never share one.
+if [ -n "$CLAUDE_CHROME_COOKIES" ]; then
+    org_cache="$cfg_dir/org_id.$(printf '%s' "$CLAUDE_CHROME_COOKIES" | sha256sum | cut -c1-12)"
+fi
 now=$(date +%s)
 UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
 
 log() { [ -n "$CLAUDE_METER_DEBUG" ] && printf 'claude-meter: %s\n' "$*" >&2; }
+
+# ---------- --list-profiles: [{"path":<Cookies db>,"label":"Chrome · Name (email)"}] for the config page ----------
+list_profiles() {
+    local roots=(
+        "Chrome|$HOME/.config/google-chrome"
+        "Chromium|$HOME/.config/chromium"
+        "Brave|$HOME/.config/BraveSoftware/Brave-Browser"
+        "Vivaldi|$HOME/.config/vivaldi"
+        "Chrome (flatpak)|$HOME/.var/app/com.google.Chrome/config/google-chrome"
+        "Chromium (flatpak)|$HOME/.var/app/org.chromium.Chromium/config/chromium"
+        "Brave (flatpak)|$HOME/.var/app/com.brave.Browser/config/BraveSoftware/Brave-Browser"
+    )
+    local r browser dir
+    for r in "${roots[@]}"; do
+        browser="${r%%|*}"; dir="${r#*|}"
+        [ -f "$dir/Local State" ] || continue
+        python3 - "$browser" "$dir" <<'PY'
+import json, os, sys
+browser, root = sys.argv[1], sys.argv[2]
+try:
+    info = json.load(open(os.path.join(root, "Local State"))).get("profile", {}).get("info_cache", {})
+except Exception:
+    info = {}
+for d in sorted(os.listdir(root)):
+    db = os.path.join(root, d, "Cookies")
+    if not os.path.isfile(db): continue
+    meta = info.get(d, {})
+    name, mail = meta.get("name") or d, meta.get("user_name") or ""
+    label = f"{browser} · {name}" + (f" ({mail})" if mail else "")
+    print(json.dumps({"path": db, "label": label}))
+PY
+    done | jq -sc '.'
+}
+[ "${1:-}" = "--list-profiles" ] && { list_profiles; exit 0; }
 
 # ---------- fallback: normalize the optional statusline snapshot (applies reset-time zeroing) ----------
 emit_cache() {
