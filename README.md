@@ -172,8 +172,9 @@ CLAUDE_METER_DEBUG=1 ~/.local/share/plasma/plasmoids/org.mat.claudemeter/content
 
 ## See also
 
-[**Codex Meter**](https://github.com/matpb/codex-meter) — the same widget for OpenAI Codex usage. The
-two are fully independent; run either or both.
+[**Codex Meter**](https://github.com/matpb/codex-meter) and
+[**Grok Meter**](https://github.com/matpb/grok-meter) — the same widget for Codex and SuperGrok.
+The three are fully independent; run any combination.
 
 ## Disclaimer
 
