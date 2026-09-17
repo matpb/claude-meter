@@ -105,7 +105,13 @@ fi
 # ---------- browser "Safe Storage" key: macOS Keychain ----------
 # args: service  account
 safe_storage_key() {
-    security find-generic-password -w -s "$1" -a "$2" 2>/dev/null
+    local cache="claude-meter: $1" k
+    security find-generic-password -w -s "$cache" -a "$2" 2>/dev/null && return 0
+    # /usr/bin/security is not in the browser item's ACL, so this read prompts: bootstrap by hand only
+    [ "${CLAUDE_METER_KEYCHAIN:-0}" = 1 ] || return 1
+    k=$(security find-generic-password -w -s "$1" -a "$2" 2>/dev/null) && [ -n "$k" ] || return 1
+    security add-generic-password -U -s "$cache" -a "$2" -w "$k" -T /usr/bin/security 2>/dev/null
+    printf '%s' "$k"
 }
 
 # ---------- decrypt the claude.ai sessionKey cookie from a browser cookie DB ----------

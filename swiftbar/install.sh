@@ -25,9 +25,10 @@ done
 
 # ---- 3. install the single multi-account plugin -----------------------------
 dest="$plugin_dir/$instance.1m.sh"
-cp -f "$SRC" "$dest"
-chmod +x "$dest"
-say "Installed plugin as: $dest"
+# symlink, not copy: a git pull in this clone updates the live plugin
+chmod +x "$SRC"
+ln -sf "$SRC" "$dest"
+say "Linked plugin: $dest -> $SRC"
 
 # ---- 4. seed accounts.conf (never overwrite an existing one) ---------------
 cfg_dir="$HOME/.config/claude-meter"

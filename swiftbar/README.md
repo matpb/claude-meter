@@ -82,6 +82,11 @@ the first success:
 
 1. **live** — decrypts your browser's claude.ai session cookie from the local
    Keychain and hits the claude.ai usage API directly.
+   macOS prompts on every read of the browser's `Safe Storage` key, so the
+   plugin never reads it on a refresh. Run it once by hand with
+   `CLAUDE_METER_KEYCHAIN=1 bash ~/SwiftBarPlugins/claudemeter.1m.sh` and
+   click **Allow**: it caches the key in a `claude-meter: <browser> Safe Storage`
+   Keychain item that later refreshes read silently.
 2. **remote** — if `CLAUDE_METER_REMOTE` is set, SSHes to that host and runs
    the plasmoid script there (useful when your browser session lives on a
    machine other than this Mac).
