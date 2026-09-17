@@ -1,0 +1,105 @@
+# Claude Meter — SwiftBar plugin
+
+A macOS port of the KDE Plasma Claude Meter widget: one compact icon in the
+menu bar, with every configured Claude.ai account's 5-hour, 7-day, and (where
+applicable) per-model usage shown as graphical capsule bars in the dropdown,
+via [SwiftBar](https://swiftbar.app).
+
+## Requirements
+
+- [SwiftBar](https://swiftbar.app) (not bundled — install it separately)
+- `jq`, `sqlite3`, `openssl`, `curl`, `python3`, `security` — all present on
+  stock macOS, nothing extra to install
+
+## Install
+
+```
+./install.sh
+```
+
+Copies `claude-meter.sh` into your SwiftBar plugin directory as
+`claudemeter.1m.sh` (refreshes every minute), removes any stale
+`personal.1m.sh` / `siku.1m.sh` plugins from the old single-account design,
+and seeds `~/.config/claude-meter/accounts.conf` plus a per-account config
+template if they don't already exist. Safe to re-run — it never clobbers an
+existing config.
+
+## Multi-account design
+
+The menu bar shows a single icon, colored by the worst percentage across
+every configured account — no text, no bars, no clutter. Click it to open a
+dropdown with one section per account, each showing its 5-hour, 7-day, and
+model-specific windows as real capsule-bar images. A thin white tick on
+each bar marks the projected end-of-window usage at the current burn rate.
+
+Configure which accounts to show in `~/.config/claude-meter/accounts.conf`:
+
+```
+CLAUDE_METER_ACCOUNTS="personal siku"
+```
+
+Each name in that list is a separate account, configured by its own
+`~/.config/claude-meter/<name>.conf` (same keys as before — see below). All
+accounts' source ladders run in parallel, so two SSH-backed accounts cost one
+round-trip's worth of wall time, not two.
+
+## Config
+
+### `accounts.conf`
+
+| Key | Purpose |
+|-----|---------|
+| `CLAUDE_METER_ACCOUNTS` | Space-separated instance names to show, e.g. `"personal siku"` |
+| `CLAUDE_METER_ICON` | Menu bar icon: an SF Symbol name (default `gauge.with.needle`), or `emoji:<char>` (e.g. `emoji:🤖`) as an escape hatch if a symbol name doesn't exist on your macOS version |
+
+Pick the icon from the dropdown's **Icon** submenu instead of editing the
+file by hand — each entry calls `claude-meter.sh --set-icon <value>` and
+refreshes.
+
+If `accounts.conf` is absent, the plugin falls back to a single instance
+derived from its own filename, exactly as the single-account design did.
+
+### `<name>.conf`
+
+Edit `~/.config/claude-meter/<name>.conf` per account. Recognised keys (env
+vars of the same name always take precedence over the file):
+
+| Key | Purpose |
+|-----|---------|
+| `CLAUDE_METER_LABEL` | Label shown in the dropdown for this account (default `Claude`) |
+| `CLAUDE_METER_REMOTE` | SSH host to fall back to, e.g. `your-linux-host` |
+| `CLAUDE_METER_REMOTE_SCRIPT` | Path to the plasmoid script on that host |
+| `CLAUDE_METER_REMOTE_COOKIES` | `CLAUDE_CHROME_COOKIES` to set on the remote |
+| `CLAUDE_METER_REMOTE_USAGE_DIR` | `CLAUDE_USAGE_DIR` to set on the remote |
+| `CLAUDE_CHROME_COOKIES` | Local Chromium-family `Cookies` DB to read |
+| `CLAUDE_USAGE_DIR` | Local statusline cache dir (default `~/.claude/usage`) |
+| `CLAUDE_ORG_ID` | claude.ai org UUID (else auto-detected and cached) |
+
+## Source ladder
+
+Each account, on every refresh, tries the following in order and stops at
+the first success:
+
+1. **live** — decrypts your browser's claude.ai session cookie from the local
+   Keychain and hits the claude.ai usage API directly.
+2. **remote** — if `CLAUDE_METER_REMOTE` is set, SSHes to that host and runs
+   the plasmoid script there (useful when your browser session lives on a
+   machine other than this Mac).
+3. **cache** — a snapshot a Claude Code statusline can write locally to
+   `$CLAUDE_USAGE_DIR/.ratelimit.json`.
+4. **stale** — the last reading this plugin itself successfully produced for
+   that account, saved to `~/.config/claude-meter/<name>.last.json`.
+
+An account on a `cache` or `stale` reading gets a `⚠︎` next to its label in
+the dropdown, with the reading's age shown — check there when the menu bar
+icon looks off.
+
+## Flags
+
+- `--json` — print the normalized JSON reading for the single filename-derived
+  instance and exit (0 if `ok:true`, 1 otherwise); ignores `accounts.conf`
+- `--selftest` — offline check of the rendering logic; prints `SELFTEST OK`
+- `--list-profiles` — list local Chromium-family cookie DBs as JSON, for
+  picking a `CLAUDE_CHROME_COOKIES` value
+- `--set-icon <value>` — write `CLAUDE_METER_ICON` into `accounts.conf` and
+  exit; this is what the dropdown's Icon submenu calls

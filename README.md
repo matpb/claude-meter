@@ -15,7 +15,8 @@ It reads your usage straight from claude.ai, so it's always fresh, counts usage 
 ## Who this is for
 
 - You're on **KDE Plasma 6** (the widget is a Plasma applet and reads the browser key from **KWallet**).
-  It is *KDE-only* — it won't work on GNOME, Xfce, etc.
+  It won't work on GNOME, Xfce, etc. **On macOS**, see [`swiftbar/`](swiftbar/) — a SwiftBar menu bar
+  port with the same bars, reading the browser key from the login Keychain.
 - You have a **Claude subscription** (Pro / Max) — those are the plans with rolling 5-hour and 7-day
   usage windows. (API-only accounts don't have these windows.)
 - You use a **Chromium-based browser** (Chrome, Chromium, Brave, Vivaldi) that is **logged into
@@ -171,6 +172,8 @@ CLAUDE_METER_DEBUG=1 ~/.local/share/plasma/plasmoids/org.mat.claudemeter/content
 - **Nothing updates** — restart the shell: `kquitapp6 plasmashell && kstart plasmashell`.
 
 ## See also
+
+[**`swiftbar/`**](swiftbar/) — the macOS menu bar port of this widget, in this repo.
 
 [**Codex Meter**](https://github.com/matpb/codex-meter) and
 [**Grok Meter**](https://github.com/matpb/grok-meter) — the same widget for Codex and SuperGrok.
