@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # claude-meter — emit current Claude subscription usage as one JSON line for the Claude Meter plasmoid.
 #
-# PRIMARY source: the claude.ai usage endpoint. Always fresh, account-wide (counts phone / web / other
+# FIRST source: Claude Code's own OAuth token (~/.claude/.credentials.json) against api.anthropic.com.
+# NEXT source: the claude.ai usage endpoint. Always fresh, account-wide (counts phone / web / other
 #   machines) and costs ZERO tokens (it is a read endpoint). Auth is your claude.ai *web session cookie*,
 #   which is decrypted on the fly from your browser's cookie store using the browser "Safe Storage" key
 #   held in KWallet (or the Secret Service / gnome-keyring). The cookie is used in memory only — it is
@@ -10,7 +11,7 @@
 #   (see extras/statusline-cache.sh in the repo). Used when the live fetch can't run (browser logged
 #   out, wallet locked, offline). When falling back, `age` reflects how old that snapshot is.
 #
-# Output: {"ok":true,"source":"live"|"cache","age":N,"five":{"pct":P,"reset_in":S},"seven":{...},
+# Output: {"ok":true,"source":"token"|"live"|"cache","age":N,"five":{"pct":P,"reset_in":S},"seven":{...},
 #          "model":{"name":"Fable","pct":P,"reset_in":S}|null}   or {"ok":false,"reason":"..."}
 #   "model" = the per-model weekly window (limits[].kind == "weekly_scoped", currently Fable); null in fallback.
 #
@@ -26,6 +27,7 @@ export PATH="/usr/local/bin:/usr/bin:/bin:$PATH:/home/linuxbrew/.linuxbrew/bin"
 cfg_dir="${XDG_CONFIG_HOME:-$HOME/.config}/claude-meter"
 usage_dir="${CLAUDE_USAGE_DIR:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/usage}"
 cache="$usage_dir/.ratelimit.json"
+creds="${CLAUDE_CREDENTIALS:-$(dirname "$usage_dir")/.credentials.json}"
 org_cache="$cfg_dir/org_id"
 # One widget per account: an explicit cookie DB gets its own org cache so two instances never share one.
 if [ -n "$CLAUDE_CHROME_COOKIES" ]; then
@@ -168,6 +170,35 @@ resolve_org() { # arg: cookie
     printf '%s' "$o"
 }
 
+# ---------- first rung: Claude Code's own OAuth token, no browser needed ----------
+try_token() {
+    command -v jq >/dev/null 2>&1 && command -v curl >/dev/null 2>&1 \
+        || { log "missing a dependency (jq/curl)"; return 1; }
+
+    local token resp
+    [ -r "$creds" ] || { log "no readable credentials file at $creds"; return 1; }
+    token=$(jq -r '.claudeAiOauth.accessToken // empty' "$creds" 2>/dev/null)
+    [ -n "$token" ] || { log "no access token in credentials file"; return 1; }
+
+    resp=$(printf 'header = "Authorization: Bearer %s"\n' "$token" | timeout 8 curl -sS --fail --max-time 8 -K - \
+        "https://api.anthropic.com/api/oauth/usage" -H "Content-Type: application/json" 2>/dev/null)
+    [ -n "$resp" ] || { log "token usage endpoint returned nothing"; return 1; }
+
+    printf '%s' "$resp" | jq -e -c --argjson now "$now" '
+      def toepoch: (sub("\\.[0-9]+"; "") | sub("\\+00:00$"; "Z") | fromdateiso8601);
+      if (.five_hour.utilization == null) then error("no util") else . end
+      | { ok: true, source: "token", age: 0,
+          five:  { pct: (.five_hour.utilization),
+                   reset_in: (if .five_hour.resets_at  == null then null else ((.five_hour.resets_at  | toepoch) - $now) end) },
+          seven: { pct: (.seven_day.utilization),
+                   reset_in: (if .seven_day.resets_at == null then null else ((.seven_day.resets_at | toepoch) - $now) end) },
+          model: ((.limits // []) | map(select(.kind == "weekly_scoped" and .scope.model != null)) | first
+                  | if . == null then null else
+                    { name: (.scope.model.display_name // "model"), pct: (.percent // 0),
+                      reset_in: (if .resets_at == null then null else ((.resets_at | toepoch) - $now) end) } end) }
+    ' 2>/dev/null || { log "could not parse token usage response"; return 1; }
+}
+
 # ---------- primary: live claude.ai usage. echoes normalized JSON or returns 1 ----------
 try_live() {
     command -v openssl >/dev/null 2>&1 && command -v sqlite3 >/dev/null 2>&1 \
@@ -198,7 +229,9 @@ try_live() {
     ' 2>/dev/null || { log "could not parse usage response"; return 1; }
 }
 
-if out=$(try_live) && [ -n "$out" ]; then
+if out=$(try_token) && [ -n "$out" ]; then
+    printf '%s\n' "$out"
+elif out=$(try_live) && [ -n "$out" ]; then
     printf '%s\n' "$out"
 else
     emit_cache

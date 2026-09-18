@@ -94,10 +94,14 @@ Running two subscriptions? See [Two subscriptions, two meters](#two-subscription
 ## How it works
 
 1. Every ~90 seconds the widget runs its bundled reader (`contents/scripts/claude-meter.sh`).
-2. The reader finds your browser's cookie store, reads the "Safe Storage" key from KWallet (or the
-   Secret Service), and **decrypts your claude.ai session cookie in memory**.
-3. It calls `https://claude.ai/api/organizations/<your-org>/usage` (the same endpoint the web app's
-   usage screen uses) and turns the 5-hour / 7-day windows into the bars.
+2. **First it tries the OAuth access token Claude Code already stores** at
+   `~/.claude/.credentials.json` (or `CLAUDE_CREDENTIALS`) and calls
+   `https://api.anthropic.com/api/oauth/usage` with it — no browser, no wallet unlock. A
+   missing or expired token just falls through to the next step silently.
+3. Otherwise the reader finds your browser's cookie store, reads the "Safe Storage" key from KWallet
+   (or the Secret Service), and **decrypts your claude.ai session cookie in memory**, then calls
+   `https://claude.ai/api/organizations/<your-org>/usage` (the same endpoint the web app's usage
+   screen uses) and turns the 5-hour / 7-day windows into the bars.
 4. If any of that can't run, it falls back to an optional local snapshot (see below) and the widget
    shows its staleness.
 
@@ -118,6 +122,7 @@ Everything auto-detects. These environment variables only exist as overrides:
 
 | Variable | Purpose |
 |---|---|
+| `CLAUDE_CREDENTIALS` | Path to a `.credentials.json` holding `.claudeAiOauth.accessToken`, for the OAuth-token rung (default: alongside `CLAUDE_USAGE_DIR`'s parent). |
 | `CLAUDE_ORG_ID` | Force a specific claude.ai organization UUID instead of auto-detecting. |
 | `CLAUDE_CHROME_COOKIES` | Path to a specific browser `Cookies` SQLite DB. |
 | `CLAUDE_USAGE_DIR` | Where to read the optional statusline fallback snapshot (default `~/.claude/usage`). |

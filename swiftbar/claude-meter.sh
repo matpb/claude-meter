@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # claude-meter (SwiftBar) — macOS port of the KDE Plasma claude-meter widget.
 #
-# Source ladder (per account): live (local keychain + claude.ai usage API) -> remote (SSH to a
-#   configured host running the plasmoid script) -> cache (local statusline snapshot)
+# Source ladder (per account): token (Claude Code's OAuth credentials file) -> live
+#   (local keychain + claude.ai usage API) -> remote (SSH to a host running the plasmoid script)
+#   -> cache (local statusline snapshot)
 #   -> stale (this script's own last-good reading). First success wins.
 #   CLAUDE_METER_FETCH set -> ladder is fetch (external command) -> stale only.
 #
-# Output contract (per account): {"ok":true,"source":"live"|"remote"|"cache"|"stale","age":N,
+# Output contract (per account): {"ok":true,"source":"token"|"live"|"remote"|"cache"|"stale","age":N,
 #   "five":{"pct":P,"reset_in":S},"seven":{...},"model":{"name":...,"pct":P,"reset_in":S}|null}
 #   or {"ok":false,"reason":"..."}
 #
@@ -186,6 +187,37 @@ resolve_org() { # arg: cookie
     [ -n "$o" ] || return 1
     mkdir -p "$cfg_dir" 2>/dev/null && printf '%s\n' "$o" > "$org_cache" 2>/dev/null
     printf '%s' "$o"
+}
+
+# ---------- first rung: Claude Code's own OAuth token, no browser needed ----------
+try_token() {
+    command -v jq >/dev/null 2>&1 && [ -n "$CURL" ] || { log "missing a dependency (jq/curl)"; return 1; }
+
+    local token resp
+    if [ -r "$creds" ]; then
+        token=$(jq -r '.claudeAiOauth.accessToken // empty' "$creds" 2>/dev/null)
+    fi
+    # never read the "Claude Code-credentials" Keychain item: /usr/bin/security is not in its ACL,
+    # so every refresh would pop an authorization dialog
+    [ -n "$token" ] || { log "no access token file at $creds"; return 1; }
+
+    resp=$(printf 'header = "Authorization: Bearer %s"\n' "$token" | timeout 8 "$CURL" -sS --fail --max-time 8 -K - \
+        "https://api.anthropic.com/api/oauth/usage" -H "Content-Type: application/json" 2>/dev/null)
+    [ -n "$resp" ] || { log "token usage endpoint returned nothing"; return 1; }
+
+    printf '%s' "$resp" | jq -e -c --argjson now "$now" '
+      def toepoch: (sub("\\.[0-9]+"; "") | sub("\\+00:00$"; "Z") | fromdateiso8601);
+      if (.five_hour.utilization == null) then error("no util") else . end
+      | { ok: true, source: "token", age: 0,
+          five:  { pct: (.five_hour.utilization),
+                   reset_in: (if .five_hour.resets_at  == null then null else ((.five_hour.resets_at  | toepoch) - $now) end) },
+          seven: { pct: (.seven_day.utilization),
+                   reset_in: (if .seven_day.resets_at == null then null else ((.seven_day.resets_at | toepoch) - $now) end) },
+          model: ((.limits // []) | map(select(.kind == "weekly_scoped" and .scope.model != null)) | first
+                  | if . == null then null else
+                    { name: (.scope.model.display_name // "model"), pct: (.percent // 0),
+                      reset_in: (if .resets_at == null then null else ((.resets_at | toepoch) - $now) end) } end) }
+    ' 2>/dev/null || { log "could not parse token usage response"; return 1; }
 }
 
 # ---------- primary: live claude.ai usage. echoes normalized JSON or returns 1 ----------
@@ -379,6 +411,7 @@ setup_instance() {
     label="${CLAUDE_METER_LABEL:-Claude}"
     usage_dir="${CLAUDE_USAGE_DIR:-$HOME/.claude/usage}"
     cache="$usage_dir/.ratelimit.json"
+    creds="${CLAUDE_CREDENTIALS:-$(dirname "$usage_dir")/.credentials.json}"
     org_cache="$cfg_dir/org_id.$instance"
 }
 
@@ -402,6 +435,11 @@ run_ladder() {
         fi
         printf '{"ok":false,"reason":"no-source"}\n'
         return 1
+    fi
+    if out=$(try_token) && [ -n "$out" ]; then
+        save_last "$out"
+        printf '%s' "$out"
+        return 0
     fi
     if out=$(try_live) && [ -n "$out" ]; then
         save_last "$out"

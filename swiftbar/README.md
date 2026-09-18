@@ -86,6 +86,7 @@ vars of the same name always take precedence over the file):
 | `CLAUDE_METER_REMOTE_USAGE_DIR` | `CLAUDE_USAGE_DIR` to set on the remote |
 | `CLAUDE_CHROME_COOKIES` | Local Chromium-family `Cookies` DB to read |
 | `CLAUDE_USAGE_DIR` | Local statusline cache dir (default `~/.claude/usage`) |
+| `CLAUDE_CREDENTIALS` | Path to a `.credentials.json` with `.claudeAiOauth.accessToken`, for the token rung (default: alongside `CLAUDE_USAGE_DIR`'s parent) |
 | `CLAUDE_ORG_ID` | claude.ai org UUID (else auto-detected and cached) |
 | `CLAUDE_METER_FETCH` | Arbitrary command line to fill this account instead of the built-in claude.ai sources; see below |
 
@@ -115,19 +116,27 @@ CLAUDE_METER_FETCH="ssh -o BatchMode=yes -o ConnectTimeout=6 my-desktop bash /ho
 Each account, on every refresh, tries the following in order and stops at
 the first success:
 
-1. **live** — decrypts your browser's claude.ai session cookie from the local
+1. **token** — reads the OAuth access token Claude Code stores at
+   `~/.claude/.credentials.json` (or `CLAUDE_CREDENTIALS`) and hits
+   `api.anthropic.com/api/oauth/usage` directly — no browser, no Safe Storage
+   prompt. A missing or expired token falls through silently. Claude Code on
+   macOS keeps its credentials in the Keychain rather than that file, so this
+   rung is normally only reached on this Mac if you point
+   `CLAUDE_CREDENTIALS` at a file yourself; it is what the **remote** rung
+   uses on the Linux side.
+2. **live** — decrypts your browser's claude.ai session cookie from the local
    Keychain and hits the claude.ai usage API directly.
    macOS prompts on every read of the browser's `Safe Storage` key, so the
    plugin never reads it on a refresh. Run it once by hand with
    `CLAUDE_METER_KEYCHAIN=1 bash ~/SwiftBarPlugins/claudemeter.1m.sh` and
    click **Allow**: it caches the key in a `claude-meter: <browser> Safe Storage`
    Keychain item that later refreshes read silently.
-2. **remote** — if `CLAUDE_METER_REMOTE` is set, SSHes to that host and runs
+3. **remote** — if `CLAUDE_METER_REMOTE` is set, SSHes to that host and runs
    the plasmoid script there (useful when your browser session lives on a
    machine other than this Mac).
-3. **cache** — a snapshot a Claude Code statusline can write locally to
+4. **cache** — a snapshot a Claude Code statusline can write locally to
    `$CLAUDE_USAGE_DIR/.ratelimit.json`.
-4. **stale** — the last reading this plugin itself successfully produced for
+5. **stale** — the last reading this plugin itself successfully produced for
    that account, saved to `~/.config/claude-meter/<name>.last.json`.
 
 An account on a `cache` or `stale` reading gets a `⚠︎` next to its label in
