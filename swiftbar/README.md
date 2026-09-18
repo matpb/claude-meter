@@ -10,6 +10,11 @@ via [SwiftBar](https://swiftbar.app).
 - [SwiftBar](https://swiftbar.app) (not bundled — install it separately)
 - `jq`, `sqlite3`, `openssl`, `curl`, `python3`, `security` — all present on
   stock macOS, nothing extra to install
+- For the **live** source, an OpenSSL-backed curl (`brew install curl`).
+  Cloudflare challenges Apple's LibreSSL curl on its TLS fingerprint, so with
+  only the stock binary the meter falls back to `--remote` or the statusline
+  snapshot — and the snapshot carries no per-model window. Point
+  `CLAUDE_METER_CURL` at another binary to override the search.
 
 ## Install
 

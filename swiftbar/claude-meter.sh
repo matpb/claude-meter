@@ -25,6 +25,17 @@ now=$(date +%s)
 # Cloudflare 403s a bare "Mozilla/5.0" on claude.ai, so send a full browser UA.
 UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
 
+# Cloudflare challenges Apple's LibreSSL/SecureTransport curl on its TLS fingerprint alone, so prefer
+# an OpenSSL-backed one (Homebrew). Without it the live source never answers and the ladder falls back.
+resolve_curl() {
+    local c
+    for c in "${CLAUDE_METER_CURL:-}" /opt/homebrew/opt/curl/bin/curl /usr/local/opt/curl/bin/curl; do
+        [ -n "$c" ] && [ -x "$c" ] && { printf '%s' "$c"; return 0; }
+    done
+    command -v curl 2>/dev/null
+}
+CURL=$(resolve_curl)
+
 log() { [ -n "$CLAUDE_METER_DEBUG" ] && printf 'claude-meter: %s\n' "$*" >&2; }
 
 # ---------- derive the fallback single instance name from this file's basename ----------
@@ -167,7 +178,7 @@ resolve_org() { # arg: cookie
     local o
     [ -n "$CLAUDE_ORG_ID" ] && { printf '%s' "$CLAUDE_ORG_ID"; return 0; }
     if [ -s "$org_cache" ]; then read -r o < "$org_cache"; [ -n "$o" ] && { printf '%s' "$o"; return 0; }; fi
-    o=$(printf 'cookie = "sessionKey=%s"\n' "$1" | timeout 8 curl -sS --fail --max-time 8 -K - \
+    o=$(printf 'cookie = "sessionKey=%s"\n' "$1" | timeout 8 "$CURL" -sS --fail --max-time 8 -K - \
         "https://claude.ai/api/organizations" \
         -H "anthropic-client-platform: web_claude_ai" -H "User-Agent: $UA" 2>/dev/null \
         | jq -r 'map(select(.capabilities | index("chat")))[0].uuid // empty' 2>/dev/null)
@@ -179,7 +190,7 @@ resolve_org() { # arg: cookie
 # ---------- primary: live claude.ai usage. echoes normalized JSON or returns 1 ----------
 try_live() {
     command -v openssl >/dev/null 2>&1 && command -v sqlite3 >/dev/null 2>&1 \
-        && command -v curl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1 \
+        && [ -n "$CURL" ] && command -v jq >/dev/null 2>&1 \
         && command -v python3 >/dev/null 2>&1 && command -v security >/dev/null 2>&1 \
         || { log "missing a dependency"; return 1; }
 
@@ -187,7 +198,7 @@ try_live() {
     cookie=$(get_session_cookie) || { log "no session cookie"; return 1; }
     org=$(resolve_org "$cookie")  || { log "could not resolve org id"; return 1; }
 
-    resp=$(printf 'cookie = "sessionKey=%s"\n' "$cookie" | timeout 8 curl -sS --fail --max-time 8 -K - \
+    resp=$(printf 'cookie = "sessionKey=%s"\n' "$cookie" | timeout 8 "$CURL" -sS --fail --max-time 8 -K - \
         "https://claude.ai/api/organizations/${org}/usage" \
         -H "content-type: application/json" -H "anthropic-client-platform: web_claude_ai" -H "User-Agent: $UA" 2>/dev/null)
     [ -n "$resp" ] || { log "usage endpoint returned nothing"; return 1; }
