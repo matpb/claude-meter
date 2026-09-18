@@ -87,6 +87,28 @@ vars of the same name always take precedence over the file):
 | `CLAUDE_CHROME_COOKIES` | Local Chromium-family `Cookies` DB to read |
 | `CLAUDE_USAGE_DIR` | Local statusline cache dir (default `~/.claude/usage`) |
 | `CLAUDE_ORG_ID` | claude.ai org UUID (else auto-detected and cached) |
+| `CLAUDE_METER_FETCH` | Arbitrary command line to fill this account instead of the built-in claude.ai sources; see below |
+
+### `CLAUDE_METER_FETCH`
+
+Set this to a shell command line that prints one JSON line shaped like the
+plugin's own `--json` output: `{"ok":true,"five":{"pct":P,"reset_in":S},"seven":{...}}`,
+with an optional `model`. When it is set for an account, that account's
+ladder becomes **fetch → stale** — the built-in claude.ai sources (live,
+remote, cache/statusline snapshot) are skipped for it entirely, since they
+read this machine's own browser cookie and usage cache, which belong to a
+different account.
+
+This is how one menu bar icon can cover an unrelated provider: point
+`CLAUDE_METER_FETCH` at a script from the sibling
+[codex-meter](https://github.com/matpb/codex-meter) project, run over SSH,
+to add an OpenAI Codex section next to your Claude accounts (the command line is
+`eval`ed locally, so spell the remote path out — a `~` would expand on this
+machine):
+
+```
+CLAUDE_METER_FETCH="ssh -o BatchMode=yes -o ConnectTimeout=6 my-desktop bash /home/me/codex-meter/plasmoid/org.mat.codexmeter/contents/scripts/codex-meter.sh"
+```
 
 ## Source ladder
 

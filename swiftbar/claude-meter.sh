@@ -4,6 +4,7 @@
 # Source ladder (per account): live (local keychain + claude.ai usage API) -> remote (SSH to a
 #   configured host running the plasmoid script) -> cache (local statusline snapshot)
 #   -> stale (this script's own last-good reading). First success wins.
+#   CLAUDE_METER_FETCH set -> ladder is fetch (external command) -> stale only.
 #
 # Output contract (per account): {"ok":true,"source":"live"|"remote"|"cache"|"stale","age":N,
 #   "five":{"pct":P,"reset_in":S},"seven":{...},"model":{"name":...,"pct":P,"reset_in":S}|null}
@@ -17,7 +18,7 @@
 #   --set-icon <value> (persist CLAUDE_METER_ICON in accounts.conf), no flag = SwiftBar render.
 
 set -f
-export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
 cfg_dir="${XDG_CONFIG_HOME:-$HOME/.config}/claude-meter"
 accounts_conf="$cfg_dir/accounts.conf"
@@ -53,7 +54,7 @@ derive_self_instance() {
 # ---------- load config file without letting it clobber already-set env vars ----------
 load_config() {
     [ -f "$conf_file" ] || return 0
-    local keys="CLAUDE_METER_LABEL CLAUDE_METER_REMOTE CLAUDE_METER_REMOTE_SCRIPT CLAUDE_METER_REMOTE_COOKIES CLAUDE_METER_REMOTE_USAGE_DIR CLAUDE_CHROME_COOKIES CLAUDE_USAGE_DIR CLAUDE_ORG_ID"
+    local keys="CLAUDE_METER_LABEL CLAUDE_METER_REMOTE CLAUDE_METER_REMOTE_SCRIPT CLAUDE_METER_REMOTE_COOKIES CLAUDE_METER_REMOTE_USAGE_DIR CLAUDE_CHROME_COOKIES CLAUDE_USAGE_DIR CLAUDE_ORG_ID CLAUDE_METER_FETCH"
     local k
     # snapshot pre-existing env values so the conf file can only fill gaps
     for k in $keys; do
@@ -236,6 +237,21 @@ try_remote() {
     ' 2>/dev/null || return 1
 }
 
+# ---------- fetch: run an arbitrary external command and normalize its claude-meter-shaped output ----------
+try_fetch() {
+    [ -n "$CLAUDE_METER_FETCH" ] || return 1
+    command -v jq >/dev/null 2>&1 || { log "fetch: jq missing"; return 1; }
+
+    local resp
+    resp=$(timeout 10 bash -c "eval \"\$1\"" _ "$CLAUDE_METER_FETCH" 2>/dev/null)
+    [ -n "$resp" ] || { log "fetch: command produced no output"; return 1; }
+
+    printf '%s' "$resp" | jq -e -c '
+      if (.ok != true) or (.five.pct == null) then error("fetch not ok") else . end
+      | { ok: true, source: (.source // "fetch"), age: (.age // 0), five: .five, seven: .seven, model: (.model // null) }
+    ' 2>/dev/null || { log "fetch: could not parse command output"; return 1; }
+}
+
 # ---------- fallback: normalize the optional statusline snapshot (applies reset-time zeroing) ----------
 emit_cache() {
     [ -s "$cache" ] || { printf '{"ok":false,"reason":"no-data"}\n'; return 1; }
@@ -369,6 +385,24 @@ setup_instance() {
 # ---------- run the source ladder for the currently set-up instance ----------
 run_ladder() {
     local out
+    # a fetch command speaks for another account/provider: never fall back to this machine's own
+    # claude.ai cookie/cache, which would render its numbers under the fetch account's label
+    if [ -n "$CLAUDE_METER_FETCH" ]; then
+        if out=$(try_fetch) && [ -n "$out" ]; then
+            save_last "$out"
+            printf '%s' "$out"
+            return 0
+        fi
+        if out=$(emit_stale) && [ -n "$out" ]; then
+            local ok; ok=$(printf '%s' "$out" | jq -r '.ok' 2>/dev/null)
+            if [ "$ok" = "true" ]; then
+                printf '%s' "$out"
+                return 0
+            fi
+        fi
+        printf '{"ok":false,"reason":"no-source"}\n'
+        return 1
+    fi
     if out=$(try_live) && [ -n "$out" ]; then
         save_last "$out"
         printf '%s' "$out"
