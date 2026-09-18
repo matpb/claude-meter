@@ -22,6 +22,8 @@ export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
 cfg_dir="${XDG_CONFIG_HOME:-$HOME/.config}/claude-meter"
 accounts_conf="$cfg_dir/accounts.conf"
 now=$(date +%s)
+# Cloudflare 403s a bare "Mozilla/5.0" on claude.ai, so send a full browser UA.
+UA="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
 
 log() { [ -n "$CLAUDE_METER_DEBUG" ] && printf 'claude-meter: %s\n' "$*" >&2; }
 
@@ -167,7 +169,7 @@ resolve_org() { # arg: cookie
     if [ -s "$org_cache" ]; then read -r o < "$org_cache"; [ -n "$o" ] && { printf '%s' "$o"; return 0; }; fi
     o=$(printf 'cookie = "sessionKey=%s"\n' "$1" | timeout 8 curl -sS --fail --max-time 8 -K - \
         "https://claude.ai/api/organizations" \
-        -H "anthropic-client-platform: web_claude_ai" -H "User-Agent: Mozilla/5.0" 2>/dev/null \
+        -H "anthropic-client-platform: web_claude_ai" -H "User-Agent: $UA" 2>/dev/null \
         | jq -r 'map(select(.capabilities | index("chat")))[0].uuid // empty' 2>/dev/null)
     [ -n "$o" ] || return 1
     mkdir -p "$cfg_dir" 2>/dev/null && printf '%s\n' "$o" > "$org_cache" 2>/dev/null
@@ -187,7 +189,7 @@ try_live() {
 
     resp=$(printf 'cookie = "sessionKey=%s"\n' "$cookie" | timeout 8 curl -sS --fail --max-time 8 -K - \
         "https://claude.ai/api/organizations/${org}/usage" \
-        -H "content-type: application/json" -H "anthropic-client-platform: web_claude_ai" -H "User-Agent: Mozilla/5.0" 2>/dev/null)
+        -H "content-type: application/json" -H "anthropic-client-platform: web_claude_ai" -H "User-Agent: $UA" 2>/dev/null)
     [ -n "$resp" ] || { log "usage endpoint returned nothing"; return 1; }
 
     printf '%s' "$resp" | jq -e -c --argjson now "$now" '
