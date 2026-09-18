@@ -290,6 +290,57 @@ color_for() {
     }'
 }
 
+# ---------- HSL (h in degrees, s/l 0..1) -> lowercase #rrggbb ----------
+hsl_to_hex() {
+    local h="$1" s="$2" l="$3"
+    awk -v h="$h" -v s="$s" -v l="$l" 'BEGIN{
+        h = h - 360.0 * int(h / 360.0); if (h < 0) h += 360.0
+        c = (1 - (l * 2 - 1 < 0 ? -(l * 2 - 1) : (l * 2 - 1))) * s
+        hp = h / 60.0
+        x = c * (1 - (hp - 2 * int(hp / 2) - 1 < 0 ? -(hp - 2 * int(hp / 2) - 1) : (hp - 2 * int(hp / 2) - 1)))
+        if (hp < 1)      { r1=c; g1=x; b1=0 }
+        else if (hp < 2) { r1=x; g1=c; b1=0 }
+        else if (hp < 3) { r1=0; g1=c; b1=x }
+        else if (hp < 4) { r1=0; g1=x; b1=c }
+        else if (hp < 5) { r1=x; g1=0; b1=c }
+        else             { r1=c; g1=0; b1=x }
+        m = l - c / 2.0
+        r = (r1 + m) * 255; g = (g1 + m) * 255; b = (b1 + m) * 255
+        if (r < 0) r = 0; if (r > 255) r = 255
+        if (g < 0) g = 0; if (g > 255) g = 255
+        if (b < 0) b = 0; if (b > 255) b = 255
+        printf "#%02x%02x%02x", int(r+0.5), int(g+0.5), int(b+0.5)
+    }'
+}
+
+# ---------- QML barColor() ported: continuous green->red on absolute usage, no pace reference ----------
+bar_color_abs() {
+    local pct="${1:-0}"
+    awk -v p="$pct" 'BEGIN{
+        t = p; if (t < 0) t = 0; if (t > 100) t = 100; t = t / 100.0
+        print (1 - t) * 140.0
+        print 0.66 + t * 0.16
+    }' | { read -r hue; read -r sat; hsl_to_hex "$hue" "$sat" 0.55; }
+}
+
+# ---------- QML paceColor() ported: colour by margin = usage% - time%, falls back to bar_color_abs ----------
+pace_color() {
+    local pct="${1:-0}" time_pct="$2"
+    case "$time_pct" in
+        ''|*[!0-9.-]*) bar_color_abs "$pct"; return ;;
+    esac
+    local hue
+    hue=$(awk -v p="$pct" -v tp="$time_pct" 'BEGIN{
+        m = p - tp
+        if (m <= -8)      hue = 140
+        else if (m < 0)   hue = 55 + (-m / 8) * 85
+        else if (m < 8)   hue = 55 * (1 - m / 8)
+        else              hue = 0
+        print hue
+    }')
+    hsl_to_hex "$hue" 0.72 0.55
+}
+
 # ---------- set up the globals one account's ladder run needs, then load its config ----------
 setup_instance() {
     instance="$1"
@@ -334,24 +385,24 @@ run_ladder() {
     return 1
 }
 
-# ---------- projected end-of-window pct at current burn rate, empty when there's no tick to draw ----------
-# args: pct  reset_in  dur(seconds)
-compute_projected() {
-    local pct="$1" reset_in="$2" dur="$3"
+# ---------- elapsed-time position in the window as a pct, empty when there's no tick to draw ----------
+# args: reset_in  dur(seconds)
+compute_time_pct() {
+    local reset_in="$1" dur="$2"
     [ -n "$reset_in" ] || { printf ''; return; }
-    awk -v p="$pct" -v r="$reset_in" -v d="$dur" 'BEGIN {
-        elapsed = d - r
-        if (elapsed <= 0 || p <= 0) { exit }
-        proj = p * d / elapsed
-        if (proj < 0) proj = 0
-        if (proj > 100) proj = 100
-        if (proj <= p || proj >= 100) { exit }
-        printf "%.4f", proj
+    awk -v r="$reset_in" -v d="$dur" 'BEGIN {
+        if (d <= 0 || r <= 0) { exit }
+        rc = r; if (rc > d) rc = d
+        t = (d - rc) / d * 100
+        if (t < 0) t = 0
+        if (t > 100) t = 100
+        if (t <= 0 || t >= 100) { exit }
+        printf "%.4f", t
     }'
 }
 
 # ---------- render a 260x24 (2x retina) capsule PNG as base64, empty on any failure ----------
-# args: pct  fill_color_hex  projected_pct(optional, empty/none for no tick)
+# args: pct  fill_color_hex  time_pct(optional, empty/none for no tick)
 capsule_png() {
     python3 - "$1" "$2" "$3" <<'PY' 2>/dev/null
 import sys, struct, zlib, base64
@@ -401,9 +452,9 @@ fill_w = W * pct / 100.0
 
 tick_center = None
 if len(sys.argv) > 3 and sys.argv[3] not in ('', 'none', 'None'):
-    projected = clampf(float(sys.argv[3]), 0.0, 100.0)
-    if projected > pct and projected < 100.0:
-        tc = W * projected / 100.0
+    t = clampf(float(sys.argv[3]), 0.0, 100.0)
+    if 0 < t < 100:
+        tc = W * t / 100.0
         if tc <= W - 1:
             tick_center = tc
 
@@ -449,13 +500,13 @@ PY
 
 # ---------- one dropdown row: percent bar as a PNG, or block glyphs if PNG generation failed ----------
 render_row() {
-    local rlabel="$1" pct="$2" reset_in="$3" dur="$4" color img text shown projected
-    color=$(color_for "$pct")
+    local rlabel="$1" pct="$2" reset_in="$3" dur="$4" color img text shown time_pct
     # percentages are rounded and width-padded so the Menlo columns actually line up
     shown=$(awk -v p="$pct" 'BEGIN{printf "%d", (p<0?0:p)+0.5}')
     text=$(printf '%-7s%4s%% · %s' "$rlabel" "$shown" "$(humanize "$reset_in")")
-    projected=$(compute_projected "$pct" "$reset_in" "$dur")
-    img=$(capsule_png "$pct" "$color" "$projected")
+    time_pct=$(compute_time_pct "$reset_in" "$dur")
+    color=$(pace_color "$pct" "$time_pct")
+    img=$(capsule_png "$pct" "$color" "$time_pct")
     if [ -n "$img" ]; then
         printf '%s | image=%s width=130 height=12 font=Menlo size=12\n' "$text" "$img"
     else
@@ -555,19 +606,19 @@ sys.exit(0 if (w == 260 and h == 24) else 1)
     }
     decode_check "$out" || { echo "FAIL: capsule PNG is not a valid 260x24 PNG"; exit 1; }
 
-    # pace tick: strictly-between projected value must change the pixels, a >=100 projection must not
+    # pace tick: a tick left of the fill and one on top of the fill must both change the pixels
     out_notick=$(capsule_png "20" "#3fb950" "")
-    out_tick=$(capsule_png "20" "#3fb950" "80")
-    [ "$out_tick" != "$out_notick" ] || { echo "FAIL: pace tick did not change the PNG"; exit 1; }
-    out_100=$(capsule_png "20" "#3fb950" "100")
-    [ "$out_100" = "$out_notick" ] || { echo "FAIL: projected>=100 must render identically to no-tick"; exit 1; }
-    proj_empty=$(compute_projected "20" "" "604800")
-    [ -z "$proj_empty" ] || { echo "FAIL: compute_projected should be empty when reset_in is empty"; exit 1; }
-    out_proj_empty=$(capsule_png "20" "#3fb950" "$proj_empty")
-    [ "$out_proj_empty" = "$out_notick" ] || { echo "FAIL: compute_projected empty result should render identically to no-tick"; exit 1; }
-    decode_check "$out_tick" || { echo "FAIL: pace-tick PNG is not a valid 260x24 PNG"; exit 1; }
-    decode_check "$out_100" || { echo "FAIL: projected=100 PNG is not a valid 260x24 PNG"; exit 1; }
-    decode_check "$out_proj_empty" || { echo "FAIL: empty-projection PNG is not a valid 260x24 PNG"; exit 1; }
+    out_tick_left=$(capsule_png "80" "#3fb950" "20")
+    [ "$out_tick_left" != "$(capsule_png "80" "#3fb950" "")" ] || { echo "FAIL: tick left of fill did not change the PNG"; exit 1; }
+    out_tick_on_fill=$(capsule_png "20" "#3fb950" "80")
+    [ "$out_tick_on_fill" != "$out_notick" ] || { echo "FAIL: tick on top of fill did not change the PNG"; exit 1; }
+    time_pct_empty=$(compute_time_pct "" "604800")
+    [ -z "$time_pct_empty" ] || { echo "FAIL: compute_time_pct should be empty when reset_in is empty"; exit 1; }
+    out_time_pct_empty=$(capsule_png "20" "#3fb950" "$time_pct_empty")
+    [ "$out_time_pct_empty" = "$out_notick" ] || { echo "FAIL: compute_time_pct empty result should render identically to no-tick"; exit 1; }
+    decode_check "$out_tick_left" || { echo "FAIL: tick-left PNG is not a valid 260x24 PNG"; exit 1; }
+    decode_check "$out_tick_on_fill" || { echo "FAIL: tick-on-fill PNG is not a valid 260x24 PNG"; exit 1; }
+    decode_check "$out_time_pct_empty" || { echo "FAIL: empty-time-pct PNG is not a valid 260x24 PNG"; exit 1; }
 
     # glyph fallback: with python3 unreachable, render_row must still produce a non-empty row
     local fakebin
@@ -578,6 +629,16 @@ sys.exit(0 if (w == 260 and h == 24) else 1)
     rm -rf "$fakebin"
     [ -n "$out" ] || { echo "FAIL: glyph fallback row is empty"; exit 1; }
     printf '%s' "$out" | grep -qE '█|░' || { echo "FAIL: glyph fallback row missing bar glyphs"; exit 1; }
+
+    # hsl_to_hex spot checks
+    [ "$(hsl_to_hex 140 0.72 0.55)" = "#3adf71" ] || { echo "FAIL: hsl_to_hex 140 0.72 0.55"; exit 1; }
+    [ "$(hsl_to_hex 0 0.72 0.55)" = "#df3a3a" ] || { echo "FAIL: hsl_to_hex 0 0.72 0.55"; exit 1; }
+    [ "$(hsl_to_hex 55 0.72 0.55)" = "#dfd13a" ] || { echo "FAIL: hsl_to_hex 55 0.72 0.55"; exit 1; }
+
+    # pace_color margin bands
+    [ "$(pace_color 10 50)" = "$(hsl_to_hex 140 0.72 0.55)" ] || { echo "FAIL: pace_color 10 50"; exit 1; }
+    [ "$(pace_color 58 50)" = "$(hsl_to_hex 0 0.72 0.55)" ] || { echo "FAIL: pace_color 58 50"; exit 1; }
+    [ "$(pace_color 30 "")" = "$(bar_color_abs 30)" ] || { echo "FAIL: pace_color fallback to bar_color_abs"; exit 1; }
 
     echo "SELFTEST OK"
     exit 0

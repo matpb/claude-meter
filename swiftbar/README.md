@@ -30,7 +30,15 @@ The menu bar shows a single icon, colored by the worst percentage across
 every configured account — no text, no bars, no clutter. Click it to open a
 dropdown with one section per account, each showing its 5-hour, 7-day, and
 model-specific windows as real capsule-bar images. A thin white tick on
-each bar marks the projected end-of-window usage at the current burn rate.
+each bar marks the current elapsed-time position in the window; fill left
+of it is under pace, fill right of it is burning fast.
+
+Bars are colored by **pace, not raw usage** — the same rule as the Plasma
+widget: **green** = comfortably under the clock, **yellow** = right on it,
+**red** = ahead of it. So 90% used with 95% of the window elapsed still reads
+calm, while 40% used at hour one reads hot. The menu bar icon is the one
+exception: it stays colored by the worst raw percentage across your accounts,
+so a single early burst doesn't turn it red all week.
 
 Configure which accounts to show in `~/.config/claude-meter/accounts.conf`:
 
