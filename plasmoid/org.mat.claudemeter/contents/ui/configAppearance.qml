@@ -9,6 +9,7 @@ KCM.SimpleKCM {
     property alias cfg_monochromeIcon: monochromeIcon.checked
     property alias cfg_showWindowLabels: showWindowLabels.checked
     property alias cfg_panelBars: panelBars.currentIndex
+    property alias cfg_showModelWindow: showModelWindow.checked
 
     Kirigami.FormLayout {
         anchors.left: parent.left
@@ -28,14 +29,21 @@ KCM.SimpleKCM {
 
         QQC2.CheckBox {
             id: showWindowLabels
-            text: i18n("Show the window labels (\"5h\", \"7d\", \"Fable\")")
+            text: i18n("Show the window labels (\"5h\", \"7d\")")
         }
 
         Item { Kirigami.FormData.isSection: true }
 
+        QQC2.CheckBox {
+            id: showModelWindow
+            Kirigami.FormData.label: i18n("Per-model window:")
+            text: i18n("Show the per-model window (Fable)")
+        }
+
         QQC2.ComboBox {
             id: panelBars
             Kirigami.FormData.label: i18n("Bars in the panel:")
+            enabled: showModelWindow.checked
             model: [
                 i18n("5-hour and 7-day"),
                 i18n("5-hour, 7-day and per-model (Fable)"),
@@ -47,7 +55,7 @@ KCM.SimpleKCM {
             Layout.fillWidth: true
             opacity: 0.7
             wrapMode: Text.WordWrap
-            text: i18n("The per-model bar only appears when your plan has one. The hover and the popup always show every window.")
+            text: i18n("The per-model window is hidden unless enabled above, and even then only appears when your plan has one. With it off, the panel always shows 5-hour and 7-day.")
         }
     }
 }

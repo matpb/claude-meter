@@ -14,9 +14,8 @@
 # Menu bar: one icon, colored by the worst reading across every configured account.
 # Dropdown: one section per account, rendered as graphical capsule bars (PNG).
 #
-# Flags: --json (print single-instance reading only), --selftest (offline render check),
-#   --list-profiles (enumerate local Chromium-family cookie DBs),
-#   --set-icon <value> (persist CLAUDE_METER_ICON in accounts.conf), no flag = SwiftBar render.
+# Flags: --json, --selftest, --list-profiles, --set-icon <value>,
+#   --set-show-model <0|1> (both persist into accounts.conf), no flag = SwiftBar render.
 
 set -f
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
@@ -99,23 +98,24 @@ PY
 }
 [ "${1:-}" = "--list-profiles" ] && { list_profiles; exit 0; }
 
-# ---------- --set-icon <value>: persist CLAUDE_METER_ICON in accounts.conf, no rendering ----------
-if [ "${1:-}" = "--set-icon" ]; then
-    icon_value="${2:-}"
+# ---------- persist KEY="value" into accounts.conf, upserting the line ----------
+persist_conf_value() {
+    local key="$1" val="$2"
     mkdir -p "$cfg_dir" 2>/dev/null
     if [ -f "$accounts_conf" ]; then
         tmp_ac="$accounts_conf.tmp.$$"
-        awk -v val="$icon_value" '
+        awk -v key="$key" -v val="$val" '
             BEGIN{done=0}
-            /^CLAUDE_METER_ICON=/{print "CLAUDE_METER_ICON=\"" val "\""; done=1; next}
+            $0 ~ "^" key "=" {print key "=\"" val "\""; done=1; next}
             {print}
-            END{if(!done) print "CLAUDE_METER_ICON=\"" val "\""}
+            END{if(!done) print key "=\"" val "\""}
         ' "$accounts_conf" > "$tmp_ac" && mv -f "$tmp_ac" "$accounts_conf"
     else
-        printf 'CLAUDE_METER_ICON="%s"\n' "$icon_value" > "$accounts_conf"
+        printf '%s="%s"\n' "$key" "$val" > "$accounts_conf"
     fi
-    exit 0
-fi
+}
+[ "${1:-}" = "--set-icon" ] && { persist_conf_value CLAUDE_METER_ICON "${2:-}"; exit 0; }
+[ "${1:-}" = "--set-show-model" ] && { persist_conf_value CLAUDE_METER_SHOW_MODEL "${2:-}"; exit 0; }
 
 # ---------- browser "Safe Storage" key: macOS Keychain ----------
 # args: service  account
@@ -634,7 +634,7 @@ account_block() {
 
     local model_name model_pct model_reset
     model_name=$(printf '%s' "$json" | jq -r '.model.name // empty')
-    if [ -n "$model_name" ]; then
+    if [ "${CLAUDE_METER_SHOW_MODEL:-0}" = 1 ] && [ -n "$model_name" ]; then
         model_pct=$(printf '%s' "$json" | jq -r '.model.pct // 0')
         model_reset=$(printf '%s' "$json" | jq -r '.model.reset_in // empty')
         render_row "$model_name" "$model_pct" "$model_reset" 604800
@@ -675,6 +675,15 @@ $(account_block "Acct2" "$cache_json")"
     # fail-json account renders a one-line unavailable row
     out=$(account_block "Acct3" "$fail_json")
     printf '%s' "$out" | grep -q 'unavailable' || { echo "FAIL: failed account missing unavailable text"; exit 1; }
+
+    # per-model row hidden unless CLAUDE_METER_SHOW_MODEL=1
+    unset CLAUDE_METER_SHOW_MODEL
+    out=$(account_block "Acct1" "$live_json")
+    printf '%s' "$out" | grep -q 'Fable' && { echo "FAIL: model row shown with CLAUDE_METER_SHOW_MODEL unset"; exit 1; }
+    out=$(CLAUDE_METER_SHOW_MODEL=0 account_block "Acct1" "$live_json")
+    printf '%s' "$out" | grep -q 'Fable' && { echo "FAIL: model row shown with CLAUDE_METER_SHOW_MODEL=0"; exit 1; }
+    out=$(CLAUDE_METER_SHOW_MODEL=1 account_block "Acct1" "$live_json")
+    printf '%s' "$out" | grep -q 'Fable' || { echo "FAIL: model row missing with CLAUDE_METER_SHOW_MODEL=1"; exit 1; }
 
     # generated PNG decodes as a valid 260x24 PNG
     out=$(capsule_png "42" "#3fb950" "")
@@ -741,16 +750,18 @@ if [ "${1:-}" = "--json" ]; then
 fi
 
 # ---------- default: multi-account SwiftBar render ----------
-# load CLAUDE_METER_ACCOUNTS / CLAUDE_METER_ICON from accounts.conf, env still wins
-had_accounts=0; had_icon=0
+# load CLAUDE_METER_ACCOUNTS / CLAUDE_METER_ICON / CLAUDE_METER_SHOW_MODEL from accounts.conf, env still wins
+had_accounts=0; had_icon=0; had_show_model=0
 [ -n "${CLAUDE_METER_ACCOUNTS+x}" ] && { had_accounts=1; val_accounts="$CLAUDE_METER_ACCOUNTS"; }
 [ -n "${CLAUDE_METER_ICON+x}" ] && { had_icon=1; val_icon="$CLAUDE_METER_ICON"; }
+[ -n "${CLAUDE_METER_SHOW_MODEL+x}" ] && { had_show_model=1; val_show_model="$CLAUDE_METER_SHOW_MODEL"; }
 if [ -f "$accounts_conf" ]; then
     # shellcheck disable=SC1090
     . "$accounts_conf"
 fi
 [ "$had_accounts" = 1 ] && CLAUDE_METER_ACCOUNTS="$val_accounts"
 [ "$had_icon" = 1 ] && CLAUDE_METER_ICON="$val_icon"
+[ "$had_show_model" = 1 ] && CLAUDE_METER_SHOW_MODEL="$val_show_model"
 
 if [ -n "${CLAUDE_METER_ACCOUNTS:-}" ]; then
     account_list="$CLAUDE_METER_ACCOUNTS"
@@ -803,7 +814,11 @@ while [ "$idx" -le "$count" ]; do
     ok=$(printf '%s' "$j" | jq -r '.ok // false' 2>/dev/null)
     if [ "$ok" = "true" ]; then
         any_ok=1
-        m=$(printf '%s' "$j" | jq -r '[.five.pct, .seven.pct, (.model.pct // 0)] | max' 2>/dev/null)
+        if [ "${CLAUDE_METER_SHOW_MODEL:-0}" = 1 ]; then
+            m=$(printf '%s' "$j" | jq -r '[.five.pct, .seven.pct, (.model.pct // 0)] | max' 2>/dev/null)
+        else
+            m=$(printf '%s' "$j" | jq -r '[.five.pct, .seven.pct] | max' 2>/dev/null)
+        fi
         worst=$(awk -v w="$worst" -v m="${m:-0}" 'BEGIN{print (m>w)?m:w}')
         src=$(printf '%s' "$j" | jq -r '.source // empty' 2>/dev/null)
         case " $sources " in *" $src "*) ;; *) sources="$sources $src" ;; esac
@@ -829,9 +844,14 @@ src_display="$(printf '%s' "$sources" | tr ' ' ',' | sed 's/,/, /g')"
 [ -z "$src_display" ] && src_display="unavailable"
 plugin_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
 
-printf 'Source: %s · Fable-aware | size=11 color=#8b949e\n' "$src_display"
+printf 'Source: %s | size=11 color=#8b949e\n' "$src_display"
 printf 'Refresh | refresh=true\n'
 printf 'Open claude.ai | href=https://claude.ai/settings/usage\n'
+if [ "${CLAUDE_METER_SHOW_MODEL:-0}" = 1 ]; then
+    printf -- 'Show per-model window | checked=true bash="%s" param1=--set-show-model param2=0 terminal=false refresh=true\n' "$plugin_path"
+else
+    printf -- 'Show per-model window | checked=false bash="%s" param1=--set-show-model param2=1 terminal=false refresh=true\n' "$plugin_path"
+fi
 printf 'Icon | size=11\n'
 printf -- '--Gauge | bash="%s" param1=--set-icon param2=gauge.with.needle terminal=false refresh=true\n' "$plugin_path"
 printf -- '--Robot | bash="%s" param1=--set-icon param2=emoji:🤖 terminal=false refresh=true\n' "$plugin_path"

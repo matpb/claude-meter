@@ -27,7 +27,7 @@ PlasmoidItem {
     property var  data5:    ({ pct: 0, reset_in: null })
     property var  data7:    ({ pct: 0, reset_in: null })
     property var  dataM:    null                    // per-model weekly window {name,pct,reset_in}, or null
-    readonly property bool haveModel: haveData && dataM !== null
+    readonly property bool haveModel: haveData && dataM !== null && Plasmoid.configuration.showModelWindow
     // 0 = 5h + 7d, 1 = 5h + 7d + model, 2 = 5h + model
     readonly property bool panelShow7: Plasmoid.configuration.panelBars !== 2
     readonly property bool panelShowM: haveModel && Plasmoid.configuration.panelBars !== 0

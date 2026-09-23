@@ -1,9 +1,11 @@
 # Claude Meter — SwiftBar plugin
 
 A macOS port of the KDE Plasma Claude Meter widget: one compact icon in the
-menu bar, with every configured Claude.ai account's 5-hour, 7-day, and (where
-applicable) per-model usage shown as graphical capsule bars in the dropdown,
-via [SwiftBar](https://swiftbar.app).
+menu bar, with every configured Claude.ai account's 5-hour and 7-day usage
+shown as graphical capsule bars in the dropdown, via
+[SwiftBar](https://swiftbar.app). The per-model window (e.g. Fable) is hidden
+by default; toggle **Show per-model window** in the dropdown, or set
+`CLAUDE_METER_SHOW_MODEL=1` in `accounts.conf`.
 
 ## Requirements
 
@@ -64,9 +66,11 @@ round-trip's worth of wall time, not two.
 |-----|---------|
 | `CLAUDE_METER_ACCOUNTS` | Space-separated instance names to show, e.g. `"personal siku"` |
 | `CLAUDE_METER_ICON` | Menu bar icon: an SF Symbol name (default `gauge.with.needle`), or `emoji:<char>` (e.g. `emoji:🤖`) as an escape hatch if a symbol name doesn't exist on your macOS version |
+| `CLAUDE_METER_SHOW_MODEL` | `1` shows the per-model window (e.g. Fable) in the dropdown and the menu bar color; unset/anything else keeps it hidden (default) |
 
-Pick the icon from the dropdown's **Icon** submenu instead of editing the
-file by hand — each entry calls `claude-meter.sh --set-icon <value>` and
+Pick the icon from the dropdown's **Icon** submenu, and toggle the per-model
+window from **Show per-model window**, instead of editing the file by hand —
+each entry calls `claude-meter.sh --set-icon`/`--set-show-model` and
 refreshes.
 
 If `accounts.conf` is absent, the plugin falls back to a single instance

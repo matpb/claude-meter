@@ -1,8 +1,8 @@
 # Claude Meter
 
 A KDE Plasma panel widget that shows your **live Claude usage** — the 5-hour and 7-day
-subscription windows, plus the per-model weekly window (Fable) when your plan has one — as compact
-bars, colored by how you're tracking against the clock.
+subscription windows, plus an opt-in per-model weekly window (Fable) when your plan has one — as
+compact bars, colored by how you're tracking against the clock.
 
 <img src="docs/panel.png" alt="Claude Meter in the panel" width="360">
 
@@ -42,9 +42,9 @@ Hover for exact numbers, reset countdowns and pace; click to open the detail pop
 ### The per-model (Fable) window
 
 Plans with a model-specific weekly cap (today that's **Fable**, capped at a share of your weekly
-limit) get a third window. It is always in the hover text and the popup. In the panel it is off by
-default so the widget stays two bars tall; turn it on in **Configure → Appearance → Bars in the
-panel** to get three bars, or swap the 7-day bar for it:
+limit) get a third window. It is hidden everywhere by default; enable **Configure → Appearance →
+Show the per-model window** to get it in the hover text and popup, then pick how it shows in the
+panel with **Bars in the panel**:
 
 <img src="docs/panel-fable.png" alt="Claude Meter with the Fable bar" width="360">
 
@@ -152,8 +152,9 @@ Right-click the widget → **Configure Claude Meter…** → **Appearance**:
 |---|---|---|
 | **Show the Claude icon** | on | Puts the Claude mark in front of the bars. Handy when you run this next to the sibling widget and want to tell them apart at a glance. |
 | **Tint it to match the panel** | off | Renders the mark in your panel's text colour instead of the brand colour. |
-| **Show the window labels** | on | The "5h" / "7d" / "Fable" captions. Turn off to reclaim panel width once the icon makes it obvious which widget is which. |
-| **Bars in the panel** | 5-hour and 7-day | Which windows get a panel bar: the two classic ones, all three, or 5-hour plus the per-model one. The hover and popup always show every window. |
+| **Show the window labels** | on | The "5h" / "7d" captions. Turn off to reclaim panel width once the icon makes it obvious which widget is which. |
+| **Show the per-model window (Fable)** | off | Enables the per-model window everywhere — hover, popup and (if picked below) the panel. |
+| **Bars in the panel** | 5-hour and 7-day | Which windows get a panel bar; only enabled once the per-model window is on. |
 
 ## Uninstall
 
