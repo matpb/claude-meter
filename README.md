@@ -1,5 +1,8 @@
 # Claude Meter
 
+> [!NOTE]
+> **There's now one widget for all of them.** [AI Meter](https://github.com/matpb/ai-meter) shows Claude (any number of accounts), Codex, Grok and Cursor in a single KDE Plasma widget, with an optional Android home screen widget. New work happens there. This widget keeps working, and its reader script lives on inside AI Meter. The macOS SwiftBar plugin stays here.
+
 A KDE Plasma panel widget that shows your **live Claude usage** — the 5-hour and 7-day
 subscription windows, plus an opt-in per-model weekly window (Fable) when your plan has one — as
 compact bars, colored by how you're tracking against the clock.
